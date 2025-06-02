@@ -5,11 +5,11 @@ import { beforeAll, expect, test } from 'vitest'
 import nock from 'nock'
 import { downloadPage, downloadPageToFolder } from './main.js'
 
-
 const fetchFixture = await fs.readFile('fixtures/fetch.html', 'utf-8')
 const fetchSite = 'https://nodejs.org'
 const fetchUrl = '/en/learn/getting-started/fetch'
-let tmpFolder;
+/** @type {string} */
+let tmpFolder = ''
 
 beforeAll(async () => {
   nock(fetchSite)

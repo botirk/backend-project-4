@@ -1,11 +1,17 @@
 import fs from 'node:fs/promises'
 import { URL } from 'node:url'
 
+/**
+ *
+ * @param {string} url
+ * @returns {void|string}
+ */
 const getFilename = (url) => {
   const parsed = new URL(url)
   if (parsed) {
-    url = parsed.hostname +  parsed.pathname
-  } else {
+    url = parsed.hostname + parsed.pathname
+  }
+  else {
     return
   }
   return url.replaceAll(/[^\w\d]/g, '-') + '.html'
@@ -18,19 +24,19 @@ const getFilename = (url) => {
  */
 export const downloadPage = (url) => {
   return new Promise((resolve, reject) => {
-    fetch(url).then(response => {
-      response.text().then(text => {
+    fetch(url).then((response) => {
+      response.text().then((text) => {
         let filename = getFilename(url)
         if (!filename) {
           reject(new Error('invalid url'))
-        } else {
+        }
+        else {
           resolve({ text, filename })
         }
-        
-      })
-    }).catch((e) => {
-      reject(e)
-    })
+      // eslint-disable-next-line
+      }).catch(e => reject(e))
+    // eslint-disable-next-line
+    }).catch(e => reject(e))
   })
 }
 
@@ -42,15 +48,13 @@ export const downloadPage = (url) => {
  */
 export const downloadPageToFolder = (url, folder) => {
   return new Promise((resolve, reject) => {
-    downloadPage(url).then(result => {
+    downloadPage(url).then((result) => {
       const resultPath = folder + '/' + result.filename
       fs.writeFile(resultPath, result.text).then(() => {
         resolve(resultPath)
-      }).catch((e) => {
-        reject(e)
-      })
-    }).catch((e) => {
-      reject(e)
-    })
+      // eslint-disable-next-line
+      }).catch(e => reject(e))
+    // eslint-disable-next-line
+    }).catch(e => reject(e))
   })
 }

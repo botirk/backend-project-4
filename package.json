@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "vitest run",
+    "testwithinstall": "npm ci && npx vitest run",
     "lint": "eslint",
     "lintwithinstall": "npm ci && npx eslint"
   },

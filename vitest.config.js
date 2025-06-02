@@ -6,5 +6,6 @@ export default defineConfig({
       reporter: ['text', 'html', 'lcov'],
       provider: 'v8',
     },
+    fileParallelism: false,
   },
 })

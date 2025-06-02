@@ -1,9 +1,8 @@
 #!/usr/bin/env node
-import { Command } from 'commander'
+import { program } from 'commander'
 import { downloadPageToFolder } from '../src/main.js'
 
 const cwd = process.cwd()
-const program = new Command('page-loader')
 
 program
   .usage('[options] <url>')

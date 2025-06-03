@@ -7,7 +7,7 @@ import * as cheerio from 'cheerio'
  * @param {string} url
  * @returns {void|string}
  */
-const getFilename = (url, response) => {
+const getFilename = (url) => {
   const parsed = new URL(url)
   if (parsed) {
     url = parsed.hostname + parsed.pathname
@@ -15,19 +15,66 @@ const getFilename = (url, response) => {
   else {
     return
   }
-  return url.replaceAll(/[^\w\d]/g, '-') + '.html'
+  if (url.endsWith('.jpeg')) {
+    url = url.slice(0, -5)
+  }
+  else if (url.endsWith('.png')) {
+    url = url.slice(0, -4)
+  }
+  else if (url.endsWith('.jpg')) {
+    url = url.slice(0, -4)
+  }
+  return url.replaceAll(/[^\w\d]/g, '-')
 }
 
 /**
  *
- * @param {string} url
+ * @param {Response} response
+ * @returns {string}
+ */
+const getFormat = (response) => {
+  switch (response.headers.get('content-type')) {
+    case 'image/jpeg':
+      return '.jpeg'
+    default:
+      return '.html'
+  }
+}
+
+/**
+ *
+ * @param {string} pageUrl
+ * @returns {string}
+ */
+const getFolder = (pageUrl) => {
+  return getFilename(pageUrl) + '_files'
+}
+
+/**
+ *
+ * @param {string} folder
+ * @returns
+ */
+const createFolder = (folder) => {
+  return new Promise((resolve, reject) => {
+    fs.access(folder).then(resolve).catch(() => fs.mkdir(folder).then(resolve).catch((e) => {
+      if (e instanceof Error && 'code' in e && e.code == 'EEXIST') resolve(true)
+      // eslint-disable-next-line
+      else reject(e)
+    }))
+  })
+}
+
+/**
+ *
+ * @param {string} pageUrl
  * @returns {Promise<{ text: string, filename: string }>}
  */
-export const downloadPage = (url) => {
+export const downloadPage = (pageUrl) => {
   return new Promise((resolve, reject) => {
-    fetch(url).then((response) => {
+    fetch(pageUrl).then((response) => {
       response.text().then((text) => {
-        let filename = getFilename(url, response)
+        let filename = getFilename(pageUrl) + '.html'
         if (!filename) {
           reject(new Error('invalid url'))
         }
@@ -43,13 +90,13 @@ export const downloadPage = (url) => {
 
 /**
  *
- * @param {string} url
+ * @param {string} pageUrl
  * @param {string} folder
  * @returns {Promise<string>} resulting path
  */
-export const downloadPageToFolder = (url, folder) => {
+export const downloadPageToFolder = (pageUrl, folder) => {
   return new Promise((resolve, reject) => {
-    downloadPage(url).then((result) => {
+    downloadPage(pageUrl).then((result) => {
       const resultPath = folder + '/' + result.filename
       fs.writeFile(resultPath, result.text).then(() => {
         resolve(resultPath)
@@ -62,87 +109,89 @@ export const downloadPageToFolder = (url, folder) => {
 
 /**
  *
- * @param {string} url
+ * @param {string} imgUrl
  * @returns {Promise<{ buffer: Buffer, filename: string }>}
  */
-export const downloadImg = (url) => {
+export const downloadImg = (imgUrl) => {
   return new Promise((resolve, reject) => {
-    fetch(url).then((response) => {
+    fetch(imgUrl).then((response) => {
       response.arrayBuffer().then((buffer) => {
-        let filename = getFilename(url, response)
+        let filename = getFilename(imgUrl) + getFormat(response)
         if (!filename) {
           reject(new Error('invalid url'))
         }
         else {
           resolve({ buffer: Buffer.from(new Uint8Array(buffer)), filename })
         }
-      // eslint-disable-next-line
-      }).catch(e => reject(e))
-    // eslint-disable-next-line
-    }).catch(e => reject(e))
-  })
-}
-
-/**
- * 
- * @param {*} resourceUrl 
- * @param {*} imgPath 
- * @returns {Promise<string>}
- */
-const downloadImgAsResource = (resourceUrl, imgPath) => {
-  return new Promise((resolve, reject) => {
-    resolve('1.jpeg')
-  })
-}
-
-/**
- * @param {string} url
- * @param {string} text
- * @param {(oldImg: string) => Promise<string|void>} converter
- * @returns {Promise<[string, string[]]>} resulting page & urls
- */
-const transformPage = (url, text, converter) => {
-  const promises = [];
-
-  const $ = cheerio.load(text)
-  for (const imgEl of $('img')) {
-    // @ts-ignore
-    const oldSrc = imgEl.attributes.src
-    const resolvedUrl = new URL(oldSrc, url)
-    
-    promises.push(converter(resolvedUrl.toString()).then((newUrl) => {
-      // @ts-ignore
-      if (newUrl) imgEl.attributes.src = newUrl
-      return newUrl
-    }).catch(() => {}))
-  }
-
-  return new Promise((resolve) => {
-    Promise.all(promises).then((urls) => {
-      resolve([$.html(), urls])
-    })
+      }).catch(reject)
+    }).catch(reject)
   })
 }
 
 /**
  *
- * @param {string} url
+ * @param {string} pageUrl
+ * @param {string} imgPath
+ * @param {string} folder
+ * @returns {Promise<{ relative: string, full: string }>}
+ */
+const downloadImgAsResource = (pageUrl, imgPath, folder) => {
+  return new Promise((resolve, reject) => {
+    downloadImg(imgPath).then((img) => {
+      const resultFolder = folder + '/' + getFolder(pageUrl)
+      const relativePath = getFolder(pageUrl) + '/' + img.filename
+      const resultPath = resultFolder + '/' + img.filename
+      createFolder(resultFolder).then(() => {
+        fs.writeFile(resultPath, img.buffer)
+          .then(() => resolve({ relative: relativePath, full: resultPath }))
+          .catch(reject)
+      }).catch(reject)
+    }).catch(reject)
+  })
+}
+
+/**
+ * @param {string} pageUrl
+ * @param {string} htmlText
+ * @param {string} folder
+ * @returns {Promise<[string, string[]]>} resulting page & urls
+ */
+const transformPage = (pageUrl, htmlText, folder) => {
+  const promises = []
+
+  const $ = cheerio.load(htmlText)
+  for (const imgEl of $('img')) {
+    const oldSrc = imgEl.attribs.src
+    const resolvedUrl = (new URL(oldSrc, pageUrl)).toString()
+
+    promises.push(downloadImgAsResource(pageUrl, resolvedUrl, folder).then((paths) => {
+      imgEl.attribs.src = paths.relative
+      return paths.full
+    }))
+  }
+
+  return new Promise((resolve, reject) => {
+    Promise.all(promises).then((urls) => {
+      resolve([$.html(), urls])
+    }).catch(reject)
+  })
+}
+
+/**
+ *
+ * @param {string} pageUrl
  * @param {string} folder
  * @returns {Promise<string[]>} resulting path
  */
-export const downloadPageWithResourcesToFolder = (url, folder) => {
+export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
   return new Promise((resolve, reject) => {
-    downloadPage(url).then((result) => {
-      transformPage(url, result.text, (oldImg) => downloadImgAsResource(url, oldImg)).then(([html, imgs]) => {
+    downloadPage(pageUrl).then((result) => {
+      transformPage(pageUrl, result.text, folder).then(([html, imgs]) => {
         const resultPath = folder + '/' + result.filename
         fs.writeFile(resultPath, html).then(() => {
           resolve([resultPath, ...imgs])
-        // eslint-disable-next-line
-        }).catch(e => reject(e))
-      })
-      
-      
-    // eslint-disable-next-line
-    }).catch(e => reject(e))
+        }).catch(reject)
+      }).catch(reject)
+    }).catch(reject)
   })
 }

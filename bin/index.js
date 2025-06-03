@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { program } from 'commander'
-import { downloadPageToFolder } from '../src/main.js'
+import { downloadPageWithResourcesToFolder } from '../src/main.js'
 
 const cwd = process.cwd()
 
@@ -17,8 +17,8 @@ program
     }
     else if (url) {
       // eslint-disable-next-line
-      downloadPageToFolder(url, options.output).then(path => {
-        console.log(path)
+      downloadPageWithResourcesToFolder(url, options.output).then(paths => {
+        for (const path of paths) console.log(path)
       }).catch((error) => {
         // eslint-disable-next-line
         if (typeof (error?.toString) === 'function') console.log(error.toString())

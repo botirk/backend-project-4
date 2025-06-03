@@ -10,8 +10,11 @@ const fetchFixture = await fs.readFile('fixtures/fetch.html', 'utf-8')
 const fetchSite = 'https://nodejs.org'
 const fetchUrl = '/en/learn/getting-started/fetch'
 const imgFixture = await fs.readFile('fixtures/benhalverson.jpeg')
+const imgFixture2 = await fs.readFile('fixtures/LankyMoose.jpeg')
 const imgSite = 'https://avatars.githubusercontent.com'
 const imgUrl = '/benhalverson'
+const imgUrl2 = '/en/learn/getting-started/benhalverson.jpeg'
+const imgUrl3 = '/en/learn/getting-started/LankyMoose.jpeg'
 const altFetchFixture = await fs.readFile('fixtures/alt_fetch.html', 'utf-8')
 /** @type {string} */
 let tmpFolder = ''
@@ -20,6 +23,16 @@ beforeAll(() => {
   nock(fetchSite)
     .get(fetchUrl)
     .reply(200, fetchFixture, { 'content-type': 'text/html', 'Content-Disposition': 'attachment; filename="fetch.html"' })
+    .persist()
+
+  nock(fetchSite)
+    .get(imgUrl2)
+    .reply(200, imgFixture, { 'content-type': 'image/jpeg' })
+    .persist()
+
+  nock(fetchSite)
+    .get(imgUrl3)
+    .reply(200, imgFixture2, { 'content-type': 'image/jpeg' })
     .persist()
 
   nock(imgSite)
@@ -75,11 +88,17 @@ test.sequential('download mocked html with resources - fail', async () => {
 
 test.sequential('download mocked html with resources - success', async () => {
   const result = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
-  const htmlPath = result.find((path) => path.includes('.html'))
+  const htmlPath = result.find(path => path.includes('.html'))
   if (!htmlPath) throw new Error('html path not found')
   const html = await fs.readFile(htmlPath, 'utf-8')
   expect(html).toBe(cheerio.load(altFetchFixture).html())
 
-  const imgs = result.filter((path) => path.includes('.jpeg'))
+  const imgs = result.filter(path => path.includes('.jpeg'))
   expect(imgs).length(2)
+
+  const imgOne = result.find(path => path.includes('nodejs-org-en-learn-getting-started-fetch_files/nodejs-org-en-learn-getting-started-benhalverson.jpeg'))
+  expect(imgOne).toBeTruthy()
+  if (!imgOne) throw new Error('not found')
+  const imgOneLoaded = await fs.readFile(imgOne)
+  expect(imgOneLoaded.equals(imgFixture))
 })

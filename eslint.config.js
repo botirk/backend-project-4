@@ -14,7 +14,7 @@ export default [
     ],
   },
   {
-    ignores: ['dist/'],
+    ignores: ['dist/', 'fixtures/'],
   },
   {
     languageOptions: {

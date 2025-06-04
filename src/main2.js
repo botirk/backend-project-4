@@ -256,15 +256,17 @@ const saveMainPage = (pageUrl, folder) => ({
     }
 })
 
-const createFolder = (pageUrl, folder) => ({
-    title: `Create folder '${folder + '/' + getFolder(pageUrl)}'`,
+const createResourceFolder = (pageUrl, folder) => ({
+    title: 'Create resource folder',
     skip: ctx => Object.keys(ctx.downloads).length <= 1,
-    task: () => {
+    task: (ctx, task) => {
+        ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
+        task.title = `Create resource folder: ${ctx.resourceFolder}`
         return new Promise((resolve, reject) => {
-            fs.access(folder + '/' + getFolder(pageUrl))
+            fs.access(ctx.resourcesFolder)
                 .then(resolve)
                 .catch(() => {
-                    fs.mkdir(folder + '/' + getFolder(pageUrl))
+                    fs.mkdir(ctx.resourcesFolder)
                         .then(resolve)
                         .catch((e) => {
                             // @ts-ignore
@@ -294,7 +296,7 @@ export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
         clearQueue(),
         transformHTMLandResources(pageUrl, folder),
         saveMainPage(pageUrl, folder),
-        createFolder(pageUrl, folder)
+        createResourceFolder(pageUrl, folder)
     ], { rendererOptions: { collapseSubtasks: false } })
     return list.run({ taskFolder: folder })
 }

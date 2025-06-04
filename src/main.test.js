@@ -4,9 +4,10 @@ import os from 'node:os'
 import { beforeAll, beforeEach, expect, test } from 'vitest'
 import nock from 'nock'
 import * as cheerio from 'cheerio'
-import { downloadImg, downloadResource, downloadPageToFolder, downloadPageWithResourcesToFolder } from './main.js'
+import { downloadPageWithResourcesToFolder } from './main.js'
 
 const fetchFixture = await fs.readFile('fixtures/fetch.html', 'utf-8')
+const altFetchFixture = cheerio.load(await fs.readFile('fixtures/alt_fetch.html', 'utf-8')).html()
 const fetchSite = 'https://nodejs.org'
 const fetchUrl = '/en/learn/getting-started/fetch'
 const imgFixture = await fs.readFile('fixtures/benhalverson.jpeg')
@@ -42,8 +43,6 @@ const jsResources = [
   'polyfills-42372ed130431b0a.js',
   'webpack-793d346370d5662d.js',
 ]
-
-const altFetchFixture = await fs.readFile('fixtures/alt_fetch.html', 'utf-8')
 /** @type {string} */
 let tmpFolder = ''
 
@@ -93,6 +92,16 @@ beforeAll(async () => {
     .reply(200, cssFixture5, { 'content-type': 'text/css' })
     .persist()
 
+  nock('https://404.com')
+    .get('/')
+    .reply(404)
+    .persist()
+
+  nock('https://403.com')
+    .get('/')
+    .reply(403)
+    .persist()
+
   for (const jsResource of jsResources) {
     nock(fetchSite)
       .get(jsPath + jsResource)
@@ -108,54 +117,26 @@ beforeEach(async () => {
 })
 
 test.sequential('throws on invalid url', async () => {
-  await expect(downloadResource('nosuchprotocol://nosuchpage')).rejects.toThrow()
-})
-
-test.sequential('download mocked url', async () => {
-  const result = await downloadResource(fetchSite + fetchUrl)
-  expect(result.text).toBe(fetchFixture)
-})
-
-test.sequential('download mocked url to file', async () => {
-  const resultPath = await downloadPageToFolder(fetchSite + fetchUrl, tmpFolder)
-  expect(resultPath.includes('.html')).toBeTruthy()
-  const resultFile = await fs.readFile(resultPath, 'utf-8')
-  expect(resultFile).toBe(fetchFixture)
-})
-
-test.sequential('download mocked url to file - test name', async () => {
-  const resultPath = await downloadPageToFolder(fetchSite + fetchUrl, tmpFolder)
-  expect(resultPath).toContain('nodejs-org-en-learn-getting-started-fetch.html')
-})
-
-test.sequential('download mocked url to file - fail', async () => {
-  await expect(downloadPageToFolder('nosuchprotocol://nosuchpage', tmpFolder)).rejects.toThrow()
-})
-
-test.sequential('download mocked url to img - fail', async () => {
-  await expect(downloadImg('nosuchprotocol://nosuchpage.img')).rejects.toThrow()
-})
-
-test.sequential('download mocked url to img - fail', async () => {
-  const result = await downloadImg('https://avatars.githubusercontent.com/benhalverson')
-
-  expect(result.buffer.equals(imgFixture)).toBeTruthy()
+  await expect(downloadPageWithResourcesToFolder('nosuchprotocol://nosuchpage', tmpFolder)).rejects.toThrow()
 })
 
 test.sequential('download mocked html with resources - fail', async () => {
   await expect(downloadPageWithResourcesToFolder('nosuchprotocol://nosuchpage.img', tmpFolder)).rejects.toThrow()
 })
 
+test.sequential('download mocked html to folder - html success', async () => {
+  const resultPath = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
+  const found = resultPath.find((path) => path.includes('nodejs-org-en-learn-getting-started-fetch.html'))
+  expect(found).toBeTruthy()
+  console.log(found)
+  if (!found) throw new Error('not found')
+  expect(await fs.readFile(found, 'utf-8')).toBe(altFetchFixture)
+})
+
 test.sequential('download mocked html with resources - img success', async () => {
   const result = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
-  const htmlPath = result.find(path => path.includes('.html'))
-  if (!htmlPath) throw new Error('html path not found')
-  const html = await fs.readFile(htmlPath, 'utf-8')
-  expect(html).toBe(cheerio.load(altFetchFixture).html())
-
   const imgs = result.filter(path => path.endsWith('.jpeg'))
   expect(imgs).length(2)
-
   const imgOne = result.find(path => path.endsWith('nodejs-org-en-learn-getting-started-fetch_files/nodejs-org-en-learn-getting-started-benhalverson.jpeg'))
   expect(imgOne).toBeTruthy()
   if (!imgOne) throw new Error('not found')
@@ -196,7 +177,18 @@ test.sequential('download mocked html with resources - css success', async () =>
 
 test.sequential('download mocked html with resources - js success', async () => {
   const result = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
-  console.log(result)
   const jss = result.filter(path => path.endsWith('.js'))
   expect(jss).length(jsResources.length)
+})
+
+test.sequential('download mocked html with resources - folder fail', async () => {
+  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`output directory '${tmpFolder + '0'}' no access`)
+})
+
+test.sequential('download 404 - fail', async () => {
+  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`error 404 no such page 'https://404.com/'`)
+})
+
+test.sequential('download 403 - fail', async () => {
+  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`error 403 no access to page 'https://403.com/'`)
 })

@@ -3,6 +3,7 @@ import { URL } from 'node:url'
 import path from 'node:path'
 import * as cheerio from 'cheerio'
 
+
 /**
  *
  * @param {string} url
@@ -77,11 +78,16 @@ const getFolder = (pageUrl) => {
  */
 const createFolder = (folder) => {
   return new Promise((resolve, reject) => {
-    fs.access(folder).then(resolve).catch(() => fs.mkdir(folder).then(resolve).catch((e) => {
-      if (e instanceof Error && 'code' in e && e.code == 'EEXIST') resolve()
-      // eslint-disable-next-line
-      else reject(e)
-    }))
+    fs.access(folder)
+      .then(resolve)
+      .catch(() => {
+        fs.mkdir(folder)
+          .then(resolve)
+          .catch((e) => {
+            if (e instanceof Error && 'code' in e && e.code == 'EEXIST') resolve()
+            else errorHandler(reject, undefined, undefined, folder)(e)
+          })
+      })
   })
 }
 
@@ -90,19 +96,23 @@ const createFolder = (folder) => {
  * @param {string} pageUrl
  * @returns {Promise<{ text: string, filename: string }>}
  */
-export const downloadResource = (pageUrl) => {
+const downloadResource2 = (pageUrl) => {
   return new Promise((resolve, reject) => {
     fetch(pageUrl).then((response) => {
-      response.text().then((text) => {
-        let filename = getFilename(pageUrl) + getFormat(pageUrl, response)
-        if (!filename) {
-          reject(new Error('invalid url'))
-        }
-        else {
-          resolve({ text, filename })
-        }
-      }).catch(reject)
-    }).catch(reject)
+      if (!response.ok) {
+        errorHandler(reject, pageUrl)(new Error(`${response.status}`))
+      } else {
+        response.text().then((text) => {
+          let filename = getFilename(pageUrl) + getFormat(pageUrl, response)
+          if (!filename) {
+            reject(new Error('invalid url'))
+          }
+          else {
+            resolve({ text, filename })
+          }
+        }).catch(errorHandler(reject, pageUrl))
+      }
+    }).catch(() => errorHandler(reject, pageUrl)(new Error(`could not resolve ${pageUrl}`)))
   })
 }
 
@@ -112,16 +122,14 @@ export const downloadResource = (pageUrl) => {
  * @param {string} folder
  * @returns {Promise<string>} resulting path
  */
-export const downloadPageToFolder = (pageUrl, folder) => {
+const downloadPageToFolder = (pageUrl, folder) => {
   return new Promise((resolve, reject) => {
-    downloadResource(pageUrl).then((result) => {
+    downloadResource2(pageUrl).then((result) => {
       const resultPath = folder + '/' + result.filename
-      fs.writeFile(resultPath, result.text).then(() => {
-        resolve(resultPath)
-      // eslint-disable-next-line
-      }).catch(e => reject(e))
-    // eslint-disable-next-line
-    }).catch(e => reject(e))
+      fs.writeFile(resultPath, result.text)
+        .then(() => resolve(resultPath))
+        .catch(errorHandler(reject, pageUrl, resultPath, folder))
+    }).catch(errorHandler(reject, pageUrl, undefined, folder))
   })
 }
 
@@ -130,19 +138,18 @@ export const downloadPageToFolder = (pageUrl, folder) => {
  * @param {string} imgUrl
  * @returns {Promise<{ buffer: Buffer, filename: string }>}
  */
-export const downloadImg = (imgUrl) => {
+const downloadImg = (imgUrl) => {
   return new Promise((resolve, reject) => {
     fetch(imgUrl).then((response) => {
-      response.arrayBuffer().then((buffer) => {
-        let filename = getFilename(imgUrl) + getFormat(imgUrl, response)
-        if (!filename) {
-          reject(new Error('invalid url'))
-        }
-        else {
+      if (!response.ok) {
+        errorHandler(reject, imgUrl)(new Error(`${response.status}`))
+      } else {
+        response.arrayBuffer().then((buffer) => {
+          let filename = getFilename(imgUrl) + getFormat(imgUrl, response)
           resolve({ buffer: Buffer.from(new Uint8Array(buffer)), filename })
-        }
-      }).catch(reject)
-    }).catch(reject)
+        }).catch(errorHandler(reject, imgUrl))
+      }
+    }).catch(() => errorHandler(reject, imgUrl)(new Error(`could not resolve ${imgUrl}`)))
   })
 }
 
@@ -162,9 +169,9 @@ const downloadImgAsResource = (pageUrl, imgPath, folder) => {
       createFolder(resultFolder).then(() => {
         fs.writeFile(resultPath, img.buffer)
           .then(() => resolve({ relative: relativePath, full: resultPath }))
-          .catch(reject)
-      }).catch(reject)
-    }).catch(reject)
+          .catch(errorHandler(reject, pageUrl, resultPath, folder))
+      }).catch(errorHandler(reject, pageUrl, resultPath, folder))
+    }).catch(errorHandler(reject, pageUrl, undefined, folder))
   })
 }
 
@@ -177,16 +184,16 @@ const downloadImgAsResource = (pageUrl, imgPath, folder) => {
  */
 const downloadOtherAsResource = (pageUrl, otherPath, folder) => {
   return new Promise((resolve, reject) => {
-    downloadResource(otherPath).then((other) => {
+    downloadResource2(otherPath).then((other) => {
       const resultFolder = folder + '/' + getFolder(pageUrl)
       const relativePath = getFolder(pageUrl) + '/' + other.filename
       const resultPath = resultFolder + '/' + other.filename
       createFolder(resultFolder).then(() => {
         fs.writeFile(resultPath, other.text)
           .then(() => resolve({ relative: relativePath, full: resultPath }))
-          .catch(reject)
-      }).catch(reject)
-    }).catch(reject)
+          .catch(errorHandler(reject, pageUrl, resultPath, folder))
+      }).catch(errorHandler(reject, pageUrl, resultPath, folder))
+    }).catch(errorHandler(reject, pageUrl, undefined, folder))
   })
 }
 
@@ -235,7 +242,7 @@ const transformPage = (pageUrl, htmlText, folder) => {
   return new Promise((resolve, reject) => {
     Promise.all(promises).then((urls) => {
       resolve([$.html(), urls])
-    }).catch(reject)
+    }).catch(errorHandler(reject, pageUrl, undefined, folder))
   })
 }
 
@@ -247,13 +254,50 @@ const transformPage = (pageUrl, htmlText, folder) => {
  */
 export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
   return new Promise((resolve, reject) => {
-    downloadResource(pageUrl).then((result) => {
+    downloadResource2(pageUrl).then((result) => {
       transformPage(pageUrl, result.text, folder).then(([html, imgs]) => {
         const resultPath = folder + '/' + result.filename
         fs.writeFile(resultPath, html).then(() => {
           resolve([resultPath, ...imgs])
-        }).catch(reject)
-      }).catch(reject)
-    }).catch(reject)
+        }).catch(errorHandler(reject, pageUrl, resultPath, folder))
+      }).catch(errorHandler(reject, pageUrl, undefined, folder))
+    }).catch(errorHandler(reject, pageUrl, undefined, folder))
   })
 }
+
+/**
+ * 
+ * @param {*} reject
+ * @param {string|void} url
+ * @param {string|void} filename
+ * @param {string|void} folder
+ * @returns {(error: Error) => void}
+ */
+const errorHandler = (reject, url, filename, folder) => (error) => {
+  if ('code' in error && error.code === 'ENOENT') {
+    folder = path.resolve(folder ?? '.')
+    const dirUp = path.resolve(folder, '..')
+    fs.access(dirUp)
+      .then(() => {
+        reject(new Error(`output directory '${folder}' no access`))
+      })
+      .catch(() => {
+        reject(new Error(`output directory '${dirUp}' no access`))
+      })
+  } 
+  else if ('code' in error && error.code === 'EACCES') {
+    reject(new Error(`no access to ${folder || filename}`))
+  }
+  else if (error.message.startsWith('404')) {
+    reject(new Error(`error 404 no such page '${url}'`))
+  } 
+  else if (error.message.startsWith('403')) {
+    reject(new Error(`error 403 no access to page '${url}'`))
+  }
+  else {
+    reject(error)
+  }
+}
+
+
+

@@ -268,11 +268,7 @@ const createResourceFolder = (pageUrl, folder) => ({
                 .catch(() => {
                     fs.mkdir(ctx.resourcesFolder)
                         .then(resolve)
-                        .catch((e) => {
-                            // @ts-ignore
-                            if (e instanceof Error && 'code' in e && e.code == 'EEXIST') resolve()
-                            else errorHandler(reject, undefined, undefined, folder)(e)
-                        })
+                        .catch(errorHandler(reject, undefined, undefined, folder))
                 })
         })
     }

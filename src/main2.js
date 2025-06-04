@@ -103,7 +103,7 @@ const getFormat = (url, response) => {
  * @returns {string}
  */
 const getFolder = (pageUrl) => {
-  return getFilename(pageUrl) + '_files'
+    return getFilename(pageUrl) + '_files'
 }
 
 const downloadResource = (url, ctx, asText = false) => ({
@@ -122,7 +122,7 @@ const downloadResource = (url, ctx, asText = false) => ({
                     } else {
                         let filename = getFilename(url) + getFormat(url, response)
                         if (asText) {
-                            response.text().then((text) => { 
+                            response.text().then((text) => {
                                 ctx.downloads[url] = { text, filename }
                                 // @ts-ignore
                                 resolve()
@@ -134,7 +134,7 @@ const downloadResource = (url, ctx, asText = false) => ({
                                 resolve()
                             }).catch(errorHandler(reject, url))
                         }
-                        
+
                     }
                 }).catch(() => errorHandler(reject, url)(new Error(`could not resolve ${url}`)))
             }
@@ -146,7 +146,7 @@ const downloadQueuedResources = (asText = false) => ({
     title: 'Download queued resources',
     task: (ctx, task) => {
         return new Listr(
-            ctx.queue.map((url) => downloadResource(url, ctx, asText)), 
+            ctx.queue.map((url) => downloadResource(url, ctx, asText)),
             { rendererOptions: { collapseSubtasks: false }, concurrent: true }
         )
     }
@@ -172,7 +172,7 @@ const parseHTMLandQueue = (pageUrl) => ({
         task.title = 'Transforming HTML and queuing downloads'
         ctx.queue ??= []
         const $ = ctx.cheerio = cheerio.load(Object.values(ctx.downloads)[0]?.text)
-        
+
         ctx.cheerioIMGs ??= []
         for (const imgEl of $('img')) {
             const oldSrc = imgEl.attribs.src
@@ -256,6 +256,26 @@ const saveMainPage = (pageUrl, folder) => ({
     }
 })
 
+const createFolder = (pageUrl, folder) => ({
+    title: `Create folder '${folder + '/' + getFolder(pageUrl)}'`,
+    skip: ctx => Object.keys(ctx.downloads).length <= 1,
+    task: () => {
+        return new Promise((resolve, reject) => {
+            fs.access(folder + '/' + getFolder(pageUrl))
+                .then(resolve)
+                .catch(() => {
+                    fs.mkdir(folder + '/' + getFolder(pageUrl))
+                        .then(resolve)
+                        .catch((e) => {
+                            // @ts-ignore
+                            if (e instanceof Error && 'code' in e && e.code == 'EEXIST') resolve()
+                            else errorHandler(reject, undefined, undefined, folder)(e)
+                        })
+                })
+        })
+    }
+})
+
 /**
  *
  * @param {string} pageUrl
@@ -273,7 +293,8 @@ export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
         downloadQueuedResources(),
         clearQueue(),
         transformHTMLandResources(pageUrl, folder),
-        saveMainPage(pageUrl, folder)
-    ], { rendererOptions: { collapseSubtasks: false }})
+        saveMainPage(pageUrl, folder),
+        createFolder(pageUrl, folder)
+    ], { rendererOptions: { collapseSubtasks: false } })
     return list.run({ taskFolder: folder })
 }

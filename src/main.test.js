@@ -126,7 +126,7 @@ test.sequential('download mocked html with resources - fail', async () => {
 
 test.sequential('download mocked html to folder - html success', async () => {
   const resultPath = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
-  const found = resultPath.find((path) => path.includes('nodejs-org-en-learn-getting-started-fetch.html'))
+  const found = resultPath.find(path => path.includes('nodejs-org-en-learn-getting-started-fetch.html'))
   expect(found).toBeTruthy()
   console.log(found)
   if (!found) throw new Error('not found')
@@ -182,7 +182,7 @@ test.sequential('download mocked html with resources - js success', async () => 
 })
 
 test.sequential('download mocked html with resources - folder fail', async () => {
-  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`output directory '${tmpFolder + '0'}' no access`)
+  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`folder '${tmpFolder + '0'}' does not exist`)
 })
 
 test.sequential('download 404 - fail', async () => {

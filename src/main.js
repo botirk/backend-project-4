@@ -1,8 +1,13 @@
-import fs from 'node:fs/promises'
-import { URL } from 'node:url'
-import path from 'node:path'
-import * as cheerio from 'cheerio'
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-argument */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 
+import fs from 'node:fs/promises'
+import path from 'node:path'
+import { Listr } from 'listr2'
+import * as cheerio from 'cheerio'
 
 /**
  *
@@ -45,8 +50,8 @@ const getFormat = (url, response) => {
   try {
     const tryExt = path.extname(new URL(url).pathname)
     if (tryExt) return tryExt
-  // eslint-disable-next-line
-  } catch { }
+    // eslint-disable-next-line
+    } catch { }
 
   switch (response.headers.get('content-type')) {
     case 'text/css':
@@ -71,202 +76,227 @@ const getFolder = (pageUrl) => {
   return getFilename(pageUrl) + '_files'
 }
 
-/**
- *
- * @param {string} folder
- * @returns {Promise<void>}
- */
-const createFolder = (folder) => {
-  return new Promise((resolve, reject) => {
-    fs.access(folder)
-      .then(resolve)
-      .catch(() => {
-        fs.mkdir(folder)
-          .then(resolve)
-          .catch((e) => {
-            if (e instanceof Error && 'code' in e && e.code == 'EEXIST') resolve()
-            else errorHandler(reject, undefined, undefined, folder)(e)
-          })
-      })
-  })
-}
-
-/**
- *
- * @param {string} pageUrl
- * @returns {Promise<{ text: string, filename: string }>}
- */
-const downloadResource2 = (pageUrl) => {
-  return new Promise((resolve, reject) => {
-    fetch(pageUrl).then((response) => {
-      if (!response.ok) {
-        errorHandler(reject, pageUrl)(new Error(`${response.status}`))
-      } else {
-        response.text().then((text) => {
-          let filename = getFilename(pageUrl) + getFormat(pageUrl, response)
-          if (!filename) {
-            reject(new Error('invalid url'))
+const downloadResource = (url, ctx, asText = false) => ({
+  title: `Download '${url}' resource`,
+  task: (_1, _2) => {
+    return new Promise((resolve, reject) => {
+      ctx.downloads ??= {}
+      if (ctx.downloads[url]) {
+        // @ts-expect-error promise is not typed
+        resolve()
+        return
+      }
+      else {
+        fetch(url).then((response) => {
+          if (!response.ok) {
+            errorHandler(reject, url)(new Error(`${response.status}`))
           }
           else {
-            resolve({ text, filename })
+            let filename = getFilename(url) + getFormat(url, response)
+            if (asText) {
+              response.text().then((text) => {
+                ctx.downloads[url] = { text, filename }
+                // @ts-expect-errorpromise is not typed
+                resolve()
+              }).catch(errorHandler(reject, url))
+            }
+            else {
+              response.blob().then((blob) => {
+                ctx.downloads[url] = { blob, filename }
+                // @ts-expect-error promise is not typed
+                resolve()
+              }).catch(errorHandler(reject, url))
+            }
           }
-        }).catch(errorHandler(reject, pageUrl))
+        }).catch(() => errorHandler(reject, url)(new Error(`could not resolve ${url}`)))
       }
-    }).catch(() => errorHandler(reject, pageUrl)(new Error(`could not resolve ${pageUrl}`)))
-  })
-}
+    })
+  },
+})
+
+const downloadQueuedResources = (asText = false) => ({
+  title: 'Download queued resources',
+  task: (ctx, task) => {
+    return new Listr(
+      ctx.queue.map(url => downloadResource(url, ctx, asText)),
+      { rendererOptions: { collapseSubtasks: false }, concurrent: true },
+    )
+  },
+})
+
+const clearQueue = () => ({
+  title: 'Clear queue',
+  task: (ctx, task) => {
+    ctx.queue = []
+  },
+})
+
+const queueMainUrl = pageUrl => ({
+  title: `Queue main page '${pageUrl}'`,
+  task: (ctx) => {
+    ctx.queue = [pageUrl]
+  },
+})
+
+const parseHTMLandQueue = pageUrl => ({
+  title: 'Parse HTML and queue downloads',
+  task: (ctx, task) => {
+    task.title = 'Transforming HTML and queuing downloads'
+    ctx.queue ??= []
+    const $ = ctx.cheerio = cheerio.load(Object.values(ctx.downloads)[0]?.text)
+
+    ctx.cheerioIMGs ??= []
+    for (const imgEl of $('img')) {
+      const oldSrc = imgEl.attribs.src
+      const resolvedUrl = (new URL(oldSrc, pageUrl)).toString()
+      ctx.queue.push(resolvedUrl)
+      ctx.cheerioIMGs.push({ imgEl, resolvedUrl })
+    }
+
+    ctx.cheerioCSSs ??= []
+    for (const cssEl of $('link[rel="stylesheet"]')) {
+      const oldSrc = cssEl.attribs.href
+      const urlObject = new URL(oldSrc, pageUrl)
+      if (urlObject.host !== new URL(pageUrl).host) continue
+      const resolvedUrl = urlObject.toString()
+      ctx.queue.push(resolvedUrl)
+      ctx.cheerioCSSs.push({ cssEl, resolvedUrl })
+    }
+
+    ctx.cheerioJSs ??= []
+    for (const jsEl of $('script[src]')) {
+      const oldSrc = jsEl.attribs.src
+      const urlObject = new URL(oldSrc, pageUrl)
+      if (urlObject.host !== new URL(pageUrl).host) continue
+      const resolvedUrl = urlObject.toString()
+      ctx.queue.push(resolvedUrl)
+      ctx.cheerioJSs.push({ jsEl, resolvedUrl })
+    }
+  },
+})
+
+const checkFolder = folder => ({
+  title: `Check output folder '${folder}'`,
+  task: () => fs.access(folder).catch((e) => {
+    if (e.code === 'ENOENT') {
+      throw new Error(`folder '${folder}' does not exist`)
+    }
+    else {
+      throw new Error(`no access to folder '${folder}'`)
+    }
+  }),
+})
+
+const transformHTMLandResources = (pageUrl, folder) => ({
+  title: 'Transform HTML and resources',
+  task: (ctx) => {
+    if (Object.keys(ctx.downloads).length <= 1) return
+
+    ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
+    const relativePath = getFolder(pageUrl) + '/'
+    const resultPath = ctx.resourcesFolder + '/'
+
+    for (const cImg of ctx.cheerioIMGs) {
+      const download = ctx.downloads[cImg.resolvedUrl]
+      cImg.blob = download.blob
+      cImg.imgEl.attribs.src = relativePath + download.filename
+      cImg.resultPath = resultPath + download.filename
+    }
+
+    for (const cCSS of ctx.cheerioCSSs) {
+      const download = ctx.downloads[cCSS.resolvedUrl]
+      cCSS.blob = download.blob
+      cCSS.cssEl.attribs.href = relativePath + download.filename
+      cCSS.resultPath = resultPath + download.filename
+    }
+
+    for (const cJS of ctx.cheerioJSs) {
+      const download = ctx.downloads[cJS.resolvedUrl]
+      cJS.blob = download.blob
+      cJS.jsEl.attribs.src = relativePath + download.filename
+      cJS.resultPath = resultPath + download.filename
+    }
+
+    ctx.downloads[pageUrl].text = ctx.cheerio.html()
+  },
+})
+
+const writeMainPage = (pageUrl, folder) => ({
+  title: `Write main page '${pageUrl}'`,
+  task: (ctx, task) => {
+    task.title = `Write main page ${pageUrl} to ${ctx.downloads[pageUrl].filename}`
+    ctx.savedFiles ??= []
+    const resultPath = folder + '/' + ctx.downloads[pageUrl].filename
+    return fs.writeFile(resultPath, ctx.downloads[pageUrl].text).then(() => ctx.savedFiles.push(resultPath))
+  },
+})
+
+const createResourceFolder = (pageUrl, folder) => ({
+  title: 'Create resource folder',
+  skip: ctx => Object.keys(ctx.downloads).length <= 1,
+  task: (ctx, task) => {
+    ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
+    task.title = `Create resource folder: ${ctx.resourcesFolder}`
+    return new Promise((resolve, reject) => {
+      fs.access(ctx.resourcesFolder)
+        .then(resolve)
+        .catch(() => {
+          fs.mkdir(ctx.resourcesFolder)
+            .then(resolve)
+            .catch(errorHandler(reject, undefined, undefined, folder))
+        })
+    })
+  },
+})
+
+const writeResource = resource => ({
+  title: `Write resource '${resource.resolvedUrl}' to '${resource.resultPath}'`,
+  task: (ctx) => {
+    ctx.savedFiles ??= []
+    return fs.writeFile(resource.resultPath, resource.blob.stream()).then(() => ctx.savedFiles.push(resource.resultPath))
+  },
+})
+
+const writeResources = () => ({
+  title: 'Write resources',
+  skip: ctx => Object.keys(ctx.downloads).length <= 1,
+  task: (ctx, task) => {
+    const tasks = [
+      ...ctx.cheerioIMGs.map(ci => writeResource(ci)),
+      ...ctx.cheerioCSSs.map(cc => writeResource(cc)),
+      ...ctx.cheerioJSs.map(cj => writeResource(cj)),
+    ]
+    task.title = `Write resources ${tasks.length}`
+    return new Listr(tasks, { concurrent: true, rendererOptions: { collapseSubtasks: false } })
+  },
+})
 
 /**
  *
  * @param {string} pageUrl
  * @param {string} folder
- * @returns {Promise<string>} resulting path
- */
-const downloadPageToFolder = (pageUrl, folder) => {
-  return new Promise((resolve, reject) => {
-    downloadResource2(pageUrl).then((result) => {
-      const resultPath = folder + '/' + result.filename
-      fs.writeFile(resultPath, result.text)
-        .then(() => resolve(resultPath))
-        .catch(errorHandler(reject, pageUrl, resultPath, folder))
-    }).catch(errorHandler(reject, pageUrl, undefined, folder))
-  })
-}
-
-/**
- *
- * @param {string} imgUrl
- * @returns {Promise<{ buffer: Buffer, filename: string }>}
- */
-const downloadImg = (imgUrl) => {
-  return new Promise((resolve, reject) => {
-    fetch(imgUrl).then((response) => {
-      if (!response.ok) {
-        errorHandler(reject, imgUrl)(new Error(`${response.status}`))
-      } else {
-        response.arrayBuffer().then((buffer) => {
-          let filename = getFilename(imgUrl) + getFormat(imgUrl, response)
-          resolve({ buffer: Buffer.from(new Uint8Array(buffer)), filename })
-        }).catch(errorHandler(reject, imgUrl))
-      }
-    }).catch(() => errorHandler(reject, imgUrl)(new Error(`could not resolve ${imgUrl}`)))
-  })
-}
-
-/**
- *
- * @param {string} pageUrl
- * @param {string} imgPath
- * @param {string} folder
- * @returns {Promise<{ relative: string, full: string }>}
- */
-const downloadImgAsResource = (pageUrl, imgPath, folder) => {
-  return new Promise((resolve, reject) => {
-    downloadImg(imgPath).then((img) => {
-      const resultFolder = folder + '/' + getFolder(pageUrl)
-      const relativePath = getFolder(pageUrl) + '/' + img.filename
-      const resultPath = resultFolder + '/' + img.filename
-      createFolder(resultFolder).then(() => {
-        fs.writeFile(resultPath, img.buffer)
-          .then(() => resolve({ relative: relativePath, full: resultPath }))
-          .catch(errorHandler(reject, pageUrl, resultPath, folder))
-      }).catch(errorHandler(reject, pageUrl, resultPath, folder))
-    }).catch(errorHandler(reject, pageUrl, undefined, folder))
-  })
-}
-
-/**
- *
- * @param {string} pageUrl
- * @param {string} otherPath
- * @param {string} folder
- * @returns {Promise<{ relative: string, full: string }>}
- */
-const downloadOtherAsResource = (pageUrl, otherPath, folder) => {
-  return new Promise((resolve, reject) => {
-    downloadResource2(otherPath).then((other) => {
-      const resultFolder = folder + '/' + getFolder(pageUrl)
-      const relativePath = getFolder(pageUrl) + '/' + other.filename
-      const resultPath = resultFolder + '/' + other.filename
-      createFolder(resultFolder).then(() => {
-        fs.writeFile(resultPath, other.text)
-          .then(() => resolve({ relative: relativePath, full: resultPath }))
-          .catch(errorHandler(reject, pageUrl, resultPath, folder))
-      }).catch(errorHandler(reject, pageUrl, resultPath, folder))
-    }).catch(errorHandler(reject, pageUrl, undefined, folder))
-  })
-}
-
-/**
- * @param {string} pageUrl
- * @param {string} htmlText
- * @param {string} folder
- * @returns {Promise<[string, string[]]>} resulting page & urls
- */
-const transformPage = (pageUrl, htmlText, folder) => {
-  const promises = []
-
-  const $ = cheerio.load(htmlText)
-  for (const imgEl of $('img')) {
-    const oldSrc = imgEl.attribs.src
-    const resolvedUrl = (new URL(oldSrc, pageUrl)).toString()
-
-    promises.push(downloadImgAsResource(pageUrl, resolvedUrl, folder).then((paths) => {
-      imgEl.attribs.src = paths.relative
-      return paths.full
-    }))
-  }
-
-  for (const cssEl of $('link[rel="stylesheet"]')) {
-    const oldSrc = cssEl.attribs.href
-    const urlObject = new URL(oldSrc, pageUrl)
-    if (urlObject.host !== new URL(pageUrl).host) continue
-    const resolvedUrl = urlObject.toString()
-    promises.push(downloadOtherAsResource(pageUrl, resolvedUrl, folder).then((paths) => {
-      cssEl.attribs.href = paths.relative
-      return paths.full
-    }))
-  }
-
-  for (const jsEl of $('script[src]')) {
-    const oldSrc = jsEl.attribs.src
-    const urlObject = new URL(oldSrc, pageUrl)
-    if (urlObject.host !== new URL(pageUrl).host) continue
-    const resolvedUrl = urlObject.toString()
-    promises.push(downloadOtherAsResource(pageUrl, resolvedUrl, folder).then((paths) => {
-      jsEl.attribs.src = paths.relative
-      return paths.full
-    }))
-  }
-
-  return new Promise((resolve, reject) => {
-    Promise.all(promises).then((urls) => {
-      resolve([$.html(), urls])
-    }).catch(errorHandler(reject, pageUrl, undefined, folder))
-  })
-}
-
-/**
- *
- * @param {string} pageUrl
- * @param {string} folder
- * @returns {Promise<string[]>} resulting path
+ * @returns {Promise<string[]>}
  */
 export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
-  return new Promise((resolve, reject) => {
-    downloadResource2(pageUrl).then((result) => {
-      transformPage(pageUrl, result.text, folder).then(([html, imgs]) => {
-        const resultPath = folder + '/' + result.filename
-        fs.writeFile(resultPath, html).then(() => {
-          resolve([resultPath, ...imgs])
-        }).catch(errorHandler(reject, pageUrl, resultPath, folder))
-      }).catch(errorHandler(reject, pageUrl, undefined, folder))
-    }).catch(errorHandler(reject, pageUrl, undefined, folder))
-  })
+  folder = path.resolve(folder)
+  const list = new Listr([
+    checkFolder(folder),
+    queueMainUrl(pageUrl),
+    downloadQueuedResources(true),
+    clearQueue(),
+    parseHTMLandQueue(pageUrl),
+    downloadQueuedResources(),
+    clearQueue(),
+    transformHTMLandResources(pageUrl, folder),
+    writeMainPage(pageUrl, folder),
+    createResourceFolder(pageUrl, folder),
+    writeResources(),
+  ], { rendererOptions: { collapseSubtasks: false } })
+  return list.run({ taskFolder: folder }).then(ctx => ctx.savedFiles)
 }
 
 /**
- * 
+ *
  * @param {*} reject
  * @param {string|void} url
  * @param {string|void} filename
@@ -279,25 +309,22 @@ const errorHandler = (reject, url, filename, folder) => (error) => {
     const dirUp = path.resolve(folder, '..')
     fs.access(dirUp)
       .then(() => {
-        reject(new Error(`output directory '${folder}' no access`))
+        reject(new Error(`output directory '${folder ?? 'undefined'}' no access`))
       })
       .catch(() => {
         reject(new Error(`output directory '${dirUp}' no access`))
       })
-  } 
+  }
   else if ('code' in error && error.code === 'EACCES') {
-    reject(new Error(`no access to ${folder || filename}`))
+    reject(new Error(`no access to ${folder ?? filename ?? 'undefined'}`))
   }
   else if (error.message.startsWith('404')) {
-    reject(new Error(`error 404 no such page '${url}'`))
-  } 
+    reject(new Error(`error 404 no such page '${url ?? 'undefined'}'`))
+  }
   else if (error.message.startsWith('403')) {
-    reject(new Error(`error 403 no access to page '${url}'`))
+    reject(new Error(`error 403 no access to page '${url ?? 'undefined'}'`))
   }
   else {
     reject(error)
   }
 }
-
-
-

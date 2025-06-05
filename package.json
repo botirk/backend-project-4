@@ -5,7 +5,7 @@
   "main": "src/main.js",
   "scripts": {
     "test": "vitest run",
-    "testwithinstall": "npm ci && npx vitest run",
+    "testci": "npm ci && npx vitest run --coverage",
     "lint": "eslint",
     "lintwithinstall": "npm ci && npx eslint"
   },
@@ -34,6 +34,7 @@
     "@eslint/js": "^9.28.0",
     "@stylistic/eslint-plugin": "^4.4.0",
     "@types/node": "^22.15.29",
+    "@vitest/coverage-v8": "^3.1.4",
     "eslint-plugin-jest": "^28.12.0",
     "globals": "^16.2.0",
     "nock": "^14.0.5",

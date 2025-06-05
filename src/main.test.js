@@ -27,6 +27,10 @@ const cssUrl4 = '/en/learn/getting-started/742739d87475cc29.css'
 const cssFixture4 = await fs.readFile('fixtures/742739d87475cc29.css', 'utf-8')
 const cssUrl5 = '/en/learn/getting-started/5c3fb37fa4e4f60.css'
 const cssFixture5 = await fs.readFile('fixtures/5c3fb37fa4e4f60.css', 'utf-8')
+const linkUrl = '/_next/static/media/731ebdadd749837e-s.p.woff2'
+const linkFixture = await fs.readFile('fixtures/731ebdadd749837e-s.p.woff2', 'utf-8')
+const linkUrl2 = '/_next/static/media/f09ec2eb560436bd-s.p.woff2'
+const linkFixture2 = await fs.readFile('fixtures/f09ec2eb560436bd-s.p.woff2', 'utf-8')
 
 const jsPath = '/en/learn/getting-started/'
 const jsResources = [
@@ -92,6 +96,21 @@ beforeAll(async () => {
     .reply(200, cssFixture5, { 'content-type': 'text/css' })
     .persist()
 
+  nock(fetchSite)
+    .get(linkUrl)
+    .reply(200, linkFixture, { 'content-type': 'font/woff2' })
+    .persist()
+
+  nock(fetchSite)
+    .get(linkUrl2)
+    .reply(200, linkFixture2, { 'content-type': 'font/woff2' })
+    .persist()
+
+  nock(fetchSite)
+    .get('/static/images/favicons/favicon.png')
+    .reply(200, await fs.readFile('fixtures/favicon.png', 'utf-8'))
+    .persist()
+
   nock('https://404.com')
     .get('/')
     .reply(404)
@@ -128,7 +147,6 @@ test.sequential('download mocked html to folder - html success', async () => {
   const resultPath = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
   const found = resultPath.find(path => path.includes('nodejs-org-en-learn-getting-started-fetch.html'))
   expect(found).toBeTruthy()
-  console.log(found)
   if (!found) throw new Error('not found')
   expect(await fs.readFile(found, 'utf-8')).toBe(altFetchFixture)
 })
@@ -173,6 +191,16 @@ test.sequential('download mocked html with resources - css success', async () =>
   if (!css) throw new Error('not found')
   cssLoaded = await fs.readFile(css, 'utf-8')
   expect(cssLoaded).toBe(cssFixture3)
+
+  css = result.find(path => path.endsWith('e-s-p.woff2'))
+  if (!css) throw new Error('not found')
+  cssLoaded = await fs.readFile(css, 'utf-8')
+  expect(cssLoaded).toBe(linkFixture)
+
+  css = result.find(path => path.endsWith('bd-s-p.woff2'))
+  if (!css) throw new Error('not found')
+  cssLoaded = await fs.readFile(css, 'utf-8')
+  expect(cssLoaded).toBe(linkFixture2)
 })
 
 test.sequential('download mocked html with resources - js success', async () => {

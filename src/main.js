@@ -22,21 +22,7 @@ const getFilename = (url) => {
   else {
     return
   }
-  if (url.endsWith('.jpeg')) {
-    url = url.slice(0, -5)
-  }
-  else if (url.endsWith('.png')) {
-    url = url.slice(0, -4)
-  }
-  else if (url.endsWith('.jpg')) {
-    url = url.slice(0, -4)
-  }
-  else if (url.endsWith('.css')) {
-    url = url.slice(0, -4)
-  }
-  else if (url.endsWith('.js')) {
-    url = url.slice(0, -3)
-  }
+  url = url.replace(/\.\w+?$/, '')
   return url.replaceAll(/[^\w\d]/g, '-')
 }
 
@@ -47,11 +33,17 @@ const getFilename = (url) => {
  * @returns {string}
  */
 const getFormat = (url, response) => {
+  try {
+    const tryExt = path.extname(new URL(url).pathname)
+    if (tryExt) return tryExt
+  // eslint-disable-next-line
+  } catch { }
+
   switch (response.headers.get('content-type')) {
     case 'text/css':
       return '.css'
     case 'image/jpeg':
-      return '.jpeg'
+      return '.jpg'
     case 'image/png':
       return '.png'
     case 'text/javascript':
@@ -59,12 +51,6 @@ const getFormat = (url, response) => {
     case 'image/gif':
       return '.gif'
   }
-
-  try {
-    const tryExt = path.extname(new URL(url).pathname)
-    if (tryExt) return tryExt
-  // eslint-disable-next-line
-  } catch { }
 
   return '.html'
 }
@@ -81,6 +67,7 @@ const getFolder = (pageUrl) => {
 const downloadResource = (url, ctx, asText = false) => ({
   title: `Download '${url}' resource`,
   task: (_1, _2) => {
+    if (ctx.downloads?.[url]) return
     return new Promise((resolve, reject) => {
       ctx.downloads ??= {}
       if (ctx.downloads[url]) {
@@ -110,7 +97,7 @@ const downloadResource = (url, ctx, asText = false) => ({
               }).catch(errorHandler(reject, url))
             }
           }
-        }).catch(() => errorHandler(reject, url)(new Error(`could not resolve '${url}'`)))
+        }).catch(() => reject(new Error(`could not resolve '${url}'`)))
       }
     })
   },
@@ -155,14 +142,14 @@ const parseHTMLandQueue = pageUrl => ({
       ctx.cheerioIMGs.push({ imgEl, resolvedUrl })
     }
 
-    ctx.cheerioCSSs ??= []
-    for (const cssEl of $('link[rel="stylesheet"]')) {
-      const oldSrc = cssEl.attribs.href
+    ctx.cheerioLINKs ??= []
+    for (const linkEl of $('link[href]')) {
+      const oldSrc = linkEl.attribs.href
       const urlObject = new URL(oldSrc, pageUrl)
       if (urlObject.host !== new URL(pageUrl).host) continue
       const resolvedUrl = urlObject.toString()
       ctx.queue.push(resolvedUrl)
-      ctx.cheerioCSSs.push({ cssEl, resolvedUrl })
+      ctx.cheerioLINKs.push({ linkEl, resolvedUrl })
     }
 
     ctx.cheerioJSs ??= []
@@ -173,16 +160,6 @@ const parseHTMLandQueue = pageUrl => ({
       const resolvedUrl = urlObject.toString()
       ctx.queue.push(resolvedUrl)
       ctx.cheerioJSs.push({ jsEl, resolvedUrl })
-    }
-
-    ctx.cheerioHTMLs ??= []
-    for (const aEl of $('a[href]')) {
-      const oldSrc = aEl.attribs.href
-      const urlObject = new URL(oldSrc, pageUrl)
-      if (urlObject.host !== new URL(pageUrl).host) continue
-      const resolvedUrl = urlObject.toString()
-      ctx.queue.push(resolvedUrl)
-      ctx.cheerioJSs.push({ aEl, resolvedUrl })
     }
   },
 })
@@ -210,30 +187,23 @@ const transformHTMLandResources = (pageUrl, folder) => ({
 
     for (const cImg of ctx.cheerioIMGs) {
       const download = ctx.downloads[cImg.resolvedUrl]
-      cImg.blob = download.blob
+      cImg.blob = download.blob ?? new Blob([download.text])
       cImg.imgEl.attribs.src = relativePath + download.filename
       cImg.resultPath = resultPath + download.filename
     }
 
-    for (const cCSS of ctx.cheerioCSSs) {
-      const download = ctx.downloads[cCSS.resolvedUrl]
-      cCSS.blob = download.blob
-      cCSS.cssEl.attribs.href = relativePath + download.filename
-      cCSS.resultPath = resultPath + download.filename
+    for (const cLINK of ctx.cheerioLINKs) {
+      const download = ctx.downloads[cLINK.resolvedUrl]
+      cLINK.blob = download.blob ?? new Blob([download.text])
+      cLINK.linkEl.attribs.href = relativePath + download.filename
+      cLINK.resultPath = resultPath + download.filename
     }
 
     for (const cJS of ctx.cheerioJSs) {
       const download = ctx.downloads[cJS.resolvedUrl]
-      cJS.blob = download.blob
+      cJS.blob = download.blob ?? new Blob([download.text])
       cJS.jsEl.attribs.src = relativePath + download.filename
       cJS.resultPath = resultPath + download.filename
-    }
-
-    for (const cHTML of ctx.cheerioHTMLs) {
-      const download = ctx.downloads[cHTML.resolvedUrl]
-      cHTML.blob = download.blob
-      cHTML.aEl.attribs.href = relativePath + download.filename
-      cHTML.resultPath = resultPath + download.filename
     }
 
     ctx.downloads[pageUrl].text = ctx.cheerio.html()
@@ -281,11 +251,11 @@ const writeResources = () => ({
   skip: ctx => Object.keys(ctx.downloads).length <= 1,
   task: (ctx, task) => {
     const tasks = [
-      ...ctx.cheerioIMGs.map(ci => writeResource(ci)),
-      ...ctx.cheerioCSSs.map(cc => writeResource(cc)),
-      ...ctx.cheerioJSs.map(cj => writeResource(cj)),
+      ...ctx.cheerioIMGs.map(c => writeResource(c)),
+      ...ctx.cheerioJSs.map(c => writeResource(c)),
+      ...ctx.cheerioLINKs.map(c => writeResource(c)),
     ]
-    task.title = `Write resources ${tasks.length}`
+    task.title = `Write ${tasks.length} resources`
     return new Listr(tasks, { concurrent: true, rendererOptions: { collapseSubtasks: false } })
   },
 })

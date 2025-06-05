@@ -1,5 +1,9 @@
 # Page loader 
 Node.js tool to download websites
+* Downloads required page
+* Downloads images from that page
+* Downloads css/js/link resources from that page
+
 
 ### Use example:
 ```

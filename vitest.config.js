@@ -5,12 +5,10 @@ export default defineConfig({
     coverage: {
       reporter: ['lcov'],
       provider: 'v8',
+      include: [
+        'src/main.js'
+      ]
     },
     fileParallelism: false,
-    exclude: [
-      'fixtures/*',
-      'bin/*',
-      'node_modules/*'
-    ]
   },
 })

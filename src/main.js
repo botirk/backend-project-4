@@ -56,6 +56,8 @@ const getFormat = (url, response) => {
       return '.png'
     case 'text/javascript':
       return '.js'
+    case 'image/gif':
+      return '.gif'
   }
 
   try {
@@ -108,7 +110,7 @@ const downloadResource = (url, ctx, asText = false) => ({
               }).catch(errorHandler(reject, url))
             }
           }
-        }).catch(() => errorHandler(reject, url)(new Error(`could not resolve ${url}`)))
+        }).catch(() => errorHandler(reject, url)(new Error(`could not resolve '${url}'`)))
       }
     })
   },
@@ -172,6 +174,16 @@ const parseHTMLandQueue = pageUrl => ({
       ctx.queue.push(resolvedUrl)
       ctx.cheerioJSs.push({ jsEl, resolvedUrl })
     }
+
+    ctx.cheerioHTMLs ??= []
+    for (const aEl of $('a[href]')) {
+      const oldSrc = aEl.attribs.href
+      const urlObject = new URL(oldSrc, pageUrl)
+      if (urlObject.host !== new URL(pageUrl).host) continue
+      const resolvedUrl = urlObject.toString()
+      ctx.queue.push(resolvedUrl)
+      ctx.cheerioJSs.push({ aEl, resolvedUrl })
+    }
   },
 })
 
@@ -215,6 +227,13 @@ const transformHTMLandResources = (pageUrl, folder) => ({
       cJS.blob = download.blob
       cJS.jsEl.attribs.src = relativePath + download.filename
       cJS.resultPath = resultPath + download.filename
+    }
+
+    for (const cHTML of ctx.cheerioHTMLs) {
+      const download = ctx.downloads[cHTML.resolvedUrl]
+      cHTML.blob = download.blob
+      cHTML.aEl.attribs.href = relativePath + download.filename
+      cHTML.resultPath = resultPath + download.filename
     }
 
     ctx.downloads[pageUrl].text = ctx.cheerio.html()

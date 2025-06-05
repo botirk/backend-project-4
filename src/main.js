@@ -274,7 +274,7 @@ const errorHandler = (reject, url, filename, folder) => (error) => {
         reject(new Error(`output directory '${dirUp}' no access`))
       })
   }
-  else if ('code' in error && error.code === 'EACCES') {
+  else if (error.code === 'EACCES') {
     reject(new Error(`no access to ${folder ?? filename ?? 'undefined'}`))
   }
   else if (error.message.startsWith('404')) {

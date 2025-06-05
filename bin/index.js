@@ -17,7 +17,7 @@ program
     }
     else if (url) {
       // eslint-disable-next-line
-      downloadPageWithResourcesToFolder(url, options.output).then(paths => {
+      downloadPageWithResourcesToFolder(url, options.output).then(() => {
         // for (const path of paths) console.log(path)
         process.exit(0)
       }).catch((error) => {

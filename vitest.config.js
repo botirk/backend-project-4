@@ -6,8 +6,8 @@ export default defineConfig({
       reporter: ['lcov'],
       provider: 'v8',
       include: [
-        'src/main.js'
-      ]
+        'src/main.js',
+      ],
     },
     fileParallelism: false,
   },

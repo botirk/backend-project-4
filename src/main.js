@@ -47,12 +47,6 @@ const getFilename = (url) => {
  * @returns {string}
  */
 const getFormat = (url, response) => {
-  try {
-    const tryExt = path.extname(new URL(url).pathname)
-    if (tryExt) return tryExt
-    // eslint-disable-next-line
-    } catch { }
-
   switch (response.headers.get('content-type')) {
     case 'text/css':
       return '.css'
@@ -62,9 +56,15 @@ const getFormat = (url, response) => {
       return '.png'
     case 'text/javascript':
       return '.js'
-    default:
-      return '.html'
   }
+
+  try {
+    const tryExt = path.extname(new URL(url).pathname)
+    if (tryExt) return tryExt
+  // eslint-disable-next-line
+  } catch { }
+
+  return '.html'
 }
 
 /**
@@ -116,7 +116,7 @@ const downloadResource = (url, ctx, asText = false) => ({
 
 const downloadQueuedResources = (asText = false) => ({
   title: 'Download queued resources',
-  task: (ctx, task) => {
+  task: (ctx) => {
     return new Listr(
       ctx.queue.map(url => downloadResource(url, ctx, asText)),
       { rendererOptions: { collapseSubtasks: false }, concurrent: true },
@@ -126,7 +126,7 @@ const downloadQueuedResources = (asText = false) => ({
 
 const clearQueue = () => ({
   title: 'Clear queue',
-  task: (ctx, task) => {
+  task: (ctx) => {
     ctx.queue = []
   },
 })
@@ -143,10 +143,10 @@ const parseHTMLandQueue = pageUrl => ({
   task: (ctx, task) => {
     task.title = 'Transforming HTML and queuing downloads'
     ctx.queue ??= []
-    const $ = ctx.cheerio = cheerio.load(Object.values(ctx.downloads)[0]?.text)
+    const $ = ctx.cheerio = cheerio.load(Object.values(ctx.downloads)[0]?.text, { scriptingEnabled: false })
 
     ctx.cheerioIMGs ??= []
-    for (const imgEl of $('img')) {
+    for (const imgEl of $('img[src]')) {
       const oldSrc = imgEl.attribs.src
       const resolvedUrl = (new URL(oldSrc, pageUrl)).toString()
       ctx.queue.push(resolvedUrl)
@@ -273,30 +273,6 @@ const writeResources = () => ({
 
 /**
  *
- * @param {string} pageUrl
- * @param {string} folder
- * @returns {Promise<string[]>}
- */
-export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
-  folder = path.resolve(folder)
-  const list = new Listr([
-    checkFolder(folder),
-    queueMainUrl(pageUrl),
-    downloadQueuedResources(true),
-    clearQueue(),
-    parseHTMLandQueue(pageUrl),
-    downloadQueuedResources(),
-    clearQueue(),
-    transformHTMLandResources(pageUrl, folder),
-    writeMainPage(pageUrl, folder),
-    createResourceFolder(pageUrl, folder),
-    writeResources(),
-  ], { rendererOptions: { collapseSubtasks: false } })
-  return list.run({ taskFolder: folder }).then(ctx => ctx.savedFiles)
-}
-
-/**
- *
  * @param {*} reject
  * @param {string|void} url
  * @param {string|void} filename
@@ -328,3 +304,29 @@ const errorHandler = (reject, url, filename, folder) => (error) => {
     reject(error)
   }
 }
+
+/**
+ *
+ * @param {string} pageUrl
+ * @param {string} folder
+ * @returns {Promise<string[]>}
+ */
+export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
+  folder = path.resolve(folder)
+  const list = new Listr([
+    checkFolder(folder),
+    queueMainUrl(pageUrl),
+    downloadQueuedResources(true),
+    clearQueue(),
+    parseHTMLandQueue(pageUrl),
+    downloadQueuedResources(),
+    clearQueue(),
+    transformHTMLandResources(pageUrl, folder),
+    writeMainPage(pageUrl, folder),
+    createResourceFolder(pageUrl, folder),
+    writeResources(),
+  ], { rendererOptions: { collapseSubtasks: false } })
+  return list.run({ taskFolder: folder }).then(ctx => ctx.savedFiles)
+}
+
+export default downloadPageWithResourcesToFolder

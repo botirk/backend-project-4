@@ -300,7 +300,7 @@ const errorHandler = (reject, url, filename, folder) => (error) => {
  * @param {string} folder
  * @returns {Promise<string[]>}
  */
-export const downloadPageWithResourcesToFolder = (pageUrl, folder) => {
+export const downloadPageWithResourcesToFolder = (pageUrl, folder = process.cwd()) => {
   folder = path.resolve(folder)
   const list = new Listr([
     checkFolder(folder),

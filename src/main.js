@@ -1,9 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
-
 import fs from 'node:fs/promises'
 import path from 'node:path'
 import { Listr } from 'listr2'
@@ -66,7 +60,7 @@ const getFolder = (pageUrl) => {
 
 const downloadResource = (url, ctx, asText = false) => ({
   title: `Download '${url}' resource`,
-  task: (_1, _2) => {
+  task: () => {
     if (ctx.downloads?.[url]) return
     return new Promise((resolve, reject) => {
       ctx.downloads ??= {}

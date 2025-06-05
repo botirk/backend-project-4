@@ -64,35 +64,28 @@ const downloadResource = (url, ctx, asText = false) => ({
     if (ctx.downloads?.[url]) return
     return new Promise((resolve, reject) => {
       ctx.downloads ??= {}
-      if (ctx.downloads[url]) {
-        // @ts-expect-error promise is not typed
-        resolve()
-        return
-      }
-      else {
-        fetch(url).then((response) => {
-          if (!response.ok) {
-            errorHandler(reject, url)(new Error(`${response.status}`))
+      fetch(url).then((response) => {
+        if (!response.ok) {
+          errorHandler(reject, url)(new Error(`${response.status}`))
+        }
+        else {
+          let filename = getFilename(url) + getFormat(url, response)
+          if (asText) {
+            response.text().then((text) => {
+              ctx.downloads[url] = { text, filename }
+              // @ts-expect-errorpromise is not typed
+              resolve()
+            }).catch(errorHandler(reject, url))
           }
           else {
-            let filename = getFilename(url) + getFormat(url, response)
-            if (asText) {
-              response.text().then((text) => {
-                ctx.downloads[url] = { text, filename }
-                // @ts-expect-errorpromise is not typed
-                resolve()
-              }).catch(errorHandler(reject, url))
-            }
-            else {
-              response.blob().then((blob) => {
-                ctx.downloads[url] = { blob, filename }
-                // @ts-expect-error promise is not typed
-                resolve()
-              }).catch(errorHandler(reject, url))
-            }
+            response.blob().then((blob) => {
+              ctx.downloads[url] = { blob, filename }
+              // @ts-expect-error promise is not typed
+              resolve()
+            }).catch(errorHandler(reject, url))
           }
-        }).catch(() => reject(new Error(`could not resolve '${url}'`)))
-      }
+        }
+      }).catch(() => reject(new Error(`could not resolve '${url}'`)))
     })
   },
 })

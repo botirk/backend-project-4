@@ -14,6 +14,9 @@ npx page-loader -h
 ### Test status:
 [![.github/workflows/test.yml](https://github.com/botirk/backend-project-4/actions/workflows/test.yml/badge.svg)](https://github.com/botirk/backend-project-4/actions/workflows/test.yml)
 
+### Coverage status:
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=botirk_backend-project-4&metric=coverage)](https://sonarcloud.io/summary/new_code?id=botirk_backend-project-4)
+
 ### Linter status:
 [![.github/workflows/lint.yml](https://github.com/botirk/backend-project-4/actions/workflows/lint.yml/badge.svg)](https://github.com/botirk/backend-project-4/actions/workflows/lint.yml)
 

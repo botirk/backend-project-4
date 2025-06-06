@@ -155,11 +155,17 @@ test.sequential('download mocked html with resources - img success', async () =>
   const result = await downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder)
   const imgs = result.filter(path => path.endsWith('.jpeg'))
   expect(imgs).length(2)
-  const imgOne = result.find(path => path.endsWith('nodejs-org-en-learn-getting-started-fetch_files/nodejs-org-en-learn-getting-started-benhalverson.jpeg'))
+  let imgOne = result.find(path => path.endsWith('nodejs-org-en-learn-getting-started-fetch_files/nodejs-org-en-learn-getting-started-benhalverson.jpeg'))
   expect(imgOne).toBeTruthy()
   if (!imgOne) throw new Error('not found')
-  const imgOneLoaded = await fs.readFile(imgOne)
+  let imgOneLoaded = await fs.readFile(imgOne)
   expect(imgOneLoaded.equals(imgFixture))
+
+  imgOne = result.find(path => path.endsWith('Moose.jpeg'))
+  expect(imgOne).toBeTruthy()
+  if (!imgOne) throw new Error('not found')
+  imgOneLoaded = await fs.readFile(imgOne)
+  expect(imgOneLoaded.equals(imgFixture2))
 })
 
 test.sequential('download mocked html with resources - css success', async () => {

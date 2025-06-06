@@ -21,7 +21,7 @@ jobs:
       with:
         node-version: ${{ matrix.node-version }}
     - run: npm run testci
-    - name: SonarQube Scan
+    - name: Coverage scan
       uses: SonarSource/sonarqube-scan-action@v4
       env:
         SONAR_TOKEN: ${{ secrets.SONARCLOUD_TOKEN }}

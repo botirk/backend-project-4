@@ -68,13 +68,17 @@ const downloadResource = (url, ctx, asText = false) => ({
         if (!response.ok) {
           if (response.status === 404) {
             reject(new Error(`error 404 page not found '${url}'`))
-          } else if (response.status === 403) {
+          }
+          else if (response.status === 403) {
             reject(new Error(`error 403 forbidden '${url}'`))
-          } else if (response.status === 500) {
+          }
+          else if (response.status === 500) {
             reject(new Error(`error 500 server error '${url}'`))
-          } else if (response.status === 401) {
+          }
+          else if (response.status === 401) {
             reject(new Error(`error 401 unauthorized '${url}'`))
-          } else {
+          }
+          else {
             reject(new Error(`error ${response.status} '${url}'`))
           }
         }

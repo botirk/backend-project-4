@@ -121,6 +121,16 @@ beforeAll(async () => {
     .reply(403)
     .persist()
 
+  nock('https://401.com')
+    .get('/')
+    .reply(401)
+    .persist()
+
+  nock('https://500.com')
+    .get('/')
+    .reply(500)
+    .persist()
+
   for (const jsResource of jsResources) {
     nock(fetchSite)
       .get(jsPath + jsResource)
@@ -220,9 +230,17 @@ test.sequential('download mocked html with resources - folder fail', async () =>
 })
 
 test.sequential('download 404 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`error 404: 'https://404.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`error 404 page not found 'https://404.com/'`)
 })
 
 test.sequential('download 403 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`error 403: 'https://403.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`error 403 forbidden 'https://403.com/'`)
+})
+
+test.sequential('download 401 - fail', async () => {
+  await expect(downloadPageWithResourcesToFolder('https://401.com/', tmpFolder)).rejects.toThrowError(`error 401 unauthorized 'https://401.com/'`)
+})
+
+test.sequential('download 500 - fail', async () => {
+  await expect(downloadPageWithResourcesToFolder('https://500.com/', tmpFolder)).rejects.toThrowError(`error 500 server error 'https://500.com/'`)
 })

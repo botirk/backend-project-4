@@ -1,8 +1,8 @@
 # Page loader 
 Node.js tool to download websites
 * Downloads required page
-* Downloads images from that page
-* Downloads css/js/link resources from that page
+* Downloads all images from that page
+* Downloads all same host css/js/link from that page
 
 
 ### Use example:

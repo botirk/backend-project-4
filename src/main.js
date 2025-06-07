@@ -66,23 +66,21 @@ const downloadResource = (url, ctx, asText = false) => ({
       ctx.downloads ??= {}
       fetch(url).then((response) => {
         if (!response.ok) {
-          errorHandler(reject, url)(new Error(`${response.status}`))
+          reject(new Error(`error ${response.status}: '${url}'`))
         }
         else {
           let filename = getFilename(url) + getFormat(url, response)
           if (asText) {
             response.text().then((text) => {
               ctx.downloads[url] = { text, filename }
-              // @ts-expect-errorpromise is not typed
               resolve()
-            }).catch(errorHandler(reject, url))
+            }).catch(reject)
           }
           else {
             response.blob().then((blob) => {
               ctx.downloads[url] = { blob, filename }
-              // @ts-expect-error promise is not typed
               resolve()
-            }).catch(errorHandler(reject, url))
+            }).catch(reject)
           }
         }
       }).catch(() => reject(new Error(`could not resolve '${url}'`)))
@@ -153,14 +151,18 @@ const parseHTMLandQueue = pageUrl => ({
 
 const checkFolder = folder => ({
   title: `Check output folder '${folder}'`,
-  task: () => fs.access(folder).catch((e) => {
-    if (e.code === 'ENOENT') {
-      throw new Error(`folder '${folder}' does not exist`)
-    }
-    else {
-      throw new Error(`no access to folder '${folder}'`)
-    }
-  }),
+  task: () => {
+    return new Promise((resolve, reject) => {
+      fs.lstat(folder).then((stats) => {
+        if (stats.isDirectory()) {
+          resolve()
+        }
+        else {
+          reject(new Error(`'${folder}' is not directory`))
+        }
+      }).catch(fsCatch(reject, folder))
+    })
+  },
 })
 
 const transformHTMLandResources = (pageUrl, folder) => ({
@@ -203,23 +205,29 @@ const writeMainPage = (pageUrl, folder) => ({
     task.title = `Write main page ${pageUrl} to ${ctx.downloads[pageUrl].filename}`
     ctx.savedFiles ??= []
     const resultPath = folder + '/' + ctx.downloads[pageUrl].filename
-    return fs.writeFile(resultPath, ctx.downloads[pageUrl].text).then(() => ctx.savedFiles.push(resultPath))
+    return new Promise((resolve, reject) => {
+      fs.writeFile(resultPath, ctx.downloads[pageUrl].text)
+        .then(() => {
+          ctx.savedFiles.push(resultPath)
+          resolve()
+        }).catch(fsCatch(reject, resultPath))
+    })
   },
 })
 
-const createResourceFolder = (pageUrl, folder) => ({
-  title: 'Create resource folder',
+const createResourcesFolder = (pageUrl, folder) => ({
+  title: 'Create resources folder',
   skip: ctx => Object.keys(ctx.downloads).length <= 1,
   task: (ctx, task) => {
     ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
-    task.title = `Create resource folder: ${ctx.resourcesFolder}`
+    task.title = `Create resources folder: '${ctx.resourcesFolder}'`
     return new Promise((resolve, reject) => {
       fs.access(ctx.resourcesFolder)
         .then(resolve)
         .catch(() => {
           fs.mkdir(ctx.resourcesFolder)
             .then(resolve)
-            .catch(errorHandler(reject, undefined, undefined, folder))
+            .catch(fsCatch(reject, ctx.resourcesFolder))
         })
     })
   },
@@ -229,7 +237,13 @@ const writeResource = resource => ({
   title: `Write resource '${resource.resolvedUrl}' to '${resource.resultPath}'`,
   task: (ctx) => {
     ctx.savedFiles ??= []
-    return fs.writeFile(resource.resultPath, resource.blob.stream()).then(() => ctx.savedFiles.push(resource.resultPath))
+    return new Promise((resolve, reject) => {
+      fs.writeFile(resource.resultPath, resource.blob.stream())
+        .then(() => {
+          ctx.savedFiles.push(resource.resultPath)
+          resolve()
+        }).catch(fsCatch(reject, resource.resultPath))
+    })
   },
 })
 
@@ -250,31 +264,15 @@ const writeResources = () => ({
 /**
  *
  * @param {*} reject
- * @param {string|void} url
- * @param {string|void} filename
- * @param {string|void} folder
+ * @param {string} path
  * @returns {(error: Error) => void}
  */
-const errorHandler = (reject, url, filename, folder) => (error) => {
-  if ('code' in error && error.code === 'ENOENT') {
-    folder = path.resolve(folder ?? '.')
-    const dirUp = path.resolve(folder, '..')
-    fs.access(dirUp)
-      .then(() => {
-        reject(new Error(`output directory '${folder ?? 'undefined'}' no access`))
-      })
-      .catch(() => {
-        reject(new Error(`output directory '${dirUp}' no access`))
-      })
+const fsCatch = (reject, path) => (error) => {
+  if (error.code === 'ENOENT') {
+    reject(new Error(`no such file or directory '${path}'`))
   }
   else if (error.code === 'EACCES') {
-    reject(new Error(`no access to ${folder ?? filename ?? 'undefined'}`))
-  }
-  else if (error.message.startsWith('404')) {
-    reject(new Error(`error 404 no such page '${url ?? 'undefined'}'`))
-  }
-  else if (error.message.startsWith('403')) {
-    reject(new Error(`error 403 no access to page '${url ?? 'undefined'}'`))
+    reject(new Error(`no access to '${path}'`))
   }
   else {
     reject(error)
@@ -299,7 +297,7 @@ export const downloadPageWithResourcesToFolder = (pageUrl, folder = process.cwd(
     clearQueue(),
     transformHTMLandResources(pageUrl, folder),
     writeMainPage(pageUrl, folder),
-    createResourceFolder(pageUrl, folder),
+    createResourcesFolder(pageUrl, folder),
     writeResources(),
   ], { rendererOptions: { collapseSubtasks: false } })
   return list.run({ taskFolder: folder }).then(ctx => ctx.savedFiles)

@@ -216,13 +216,13 @@ test.sequential('download mocked html with resources - js success', async () => 
 })
 
 test.sequential('download mocked html with resources - folder fail', async () => {
-  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`folder '${tmpFolder + '0'}' does not exist`)
+  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`no such file or directory '${tmpFolder + '0'}'`)
 })
 
 test.sequential('download 404 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`error 404 no such page 'https://404.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`error 404: 'https://404.com/'`)
 })
 
 test.sequential('download 403 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`error 403 no access to page 'https://403.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`error 403: 'https://403.com/'`)
 })

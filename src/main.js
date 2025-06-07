@@ -155,7 +155,9 @@ const checkFolder = folder => ({
     return new Promise((resolve, reject) => {
       fs.lstat(folder).then((stats) => {
         if (stats.isDirectory()) {
-          resolve()
+          fs.access(folder)
+            .then(resolve)
+            .catch(fsCatch(reject, folder))
         }
         else {
           reject(new Error(`'${folder}' is not directory`))

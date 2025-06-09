@@ -62,42 +62,34 @@ const downloadResource = (url, ctx, asText = false) => ({
   title: `Download '${url}' resource`,
   task: () => {
     if (ctx.downloads?.[url]) return
-    return new Promise((resolve, reject) => {
-      ctx.downloads ??= {}
-      fetch(url).then((response) => {
-        if (!response.ok) {
-          if (response.status === 404) {
-            reject(new Error(`error 404 page not found '${url}'`))
-          }
-          else if (response.status === 403) {
-            reject(new Error(`error 403 forbidden '${url}'`))
-          }
-          else if (response.status === 500) {
-            reject(new Error(`error 500 server error '${url}'`))
-          }
-          else if (response.status === 401) {
-            reject(new Error(`error 401 unauthorized '${url}'`))
-          }
-          else {
-            reject(new Error(`error ${response.status} '${url}'`))
-          }
+    ctx.downloads ??= {}
+    return fetch(url).then((response) => {
+      if (!response.ok) {
+        if (response.status === 404) {
+          throw new Error(`error 404 page not found '${url}'`)
+        }
+        else if (response.status === 403) {
+          throw new Error(`error 403 forbidden '${url}'`)
+        }
+        else if (response.status === 500) {
+          throw new Error(`error 500 server error '${url}'`)
+        }
+        else if (response.status === 401) {
+          throw new Error(`error 401 unauthorized '${url}'`)
         }
         else {
-          let filename = getFilename(url) + getFormat(url, response)
-          if (asText) {
-            response.text().then((text) => {
-              ctx.downloads[url] = { text, filename }
-              resolve()
-            }).catch(reject)
-          }
-          else {
-            response.blob().then((blob) => {
-              ctx.downloads[url] = { blob, filename }
-              resolve()
-            }).catch(reject)
-          }
+          throw new Error(`error ${response.status} '${url}'`)
         }
-      }).catch(() => reject(new Error(`could not resolve '${url}'`)))
+      }
+      else {
+        let filename = getFilename(url) + getFormat(url, response)
+        if (asText) {
+          return response.text().then(text => ctx.downloads[url] = { text, filename })
+        }
+        else {
+          return response.blob().then(blob => ctx.downloads[url] = { blob, filename })
+        }
+      }
     })
   },
 })
@@ -165,20 +157,14 @@ const parseHTMLandQueue = pageUrl => ({
 
 const checkFolder = folder => ({
   title: `Check output folder '${folder}'`,
-  task: () => {
-    return new Promise((resolve, reject) => {
-      fs.lstat(folder).then((stats) => {
-        if (stats.isDirectory()) {
-          fs.access(folder)
-            .then(resolve)
-            .catch(fsCatch(reject, folder))
-        }
-        else {
-          reject(new Error(`'${folder}' is not directory`))
-        }
-      }).catch(fsCatch(reject, folder))
-    })
-  },
+  task: () => fs.lstat(folder).then((stats) => {
+    if (stats.isDirectory()) {
+      return fs.access(folder)
+    }
+    else {
+      throw new Error(`'${folder}' is not directory`)
+    }
+  }).catch(fsCatch(folder)),
 })
 
 const transformHTMLandResources = (pageUrl, folder) => ({
@@ -221,13 +207,9 @@ const writeMainPage = (pageUrl, folder) => ({
     task.title = `Write main page ${pageUrl} to ${ctx.downloads[pageUrl].filename}`
     ctx.savedFiles ??= []
     const resultPath = folder + '/' + ctx.downloads[pageUrl].filename
-    return new Promise((resolve, reject) => {
-      fs.writeFile(resultPath, ctx.downloads[pageUrl].text)
-        .then(() => {
-          ctx.savedFiles.push(resultPath)
-          resolve()
-        }).catch(fsCatch(reject, resultPath))
-    })
+    return fs.writeFile(resultPath, ctx.downloads[pageUrl].text)
+      .then(() => ctx.savedFiles.push(resultPath))
+      .catch(fsCatch(resultPath))
   },
 })
 
@@ -237,15 +219,15 @@ const createResourcesFolder = (pageUrl, folder) => ({
   task: (ctx, task) => {
     ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
     task.title = `Create resources folder: '${ctx.resourcesFolder}'`
-    return new Promise((resolve, reject) => {
-      fs.access(ctx.resourcesFolder)
-        .then(resolve)
-        .catch(() => {
-          fs.mkdir(ctx.resourcesFolder)
-            .then(resolve)
-            .catch(fsCatch(reject, ctx.resourcesFolder))
-        })
-    })
+    return fs.lstat(ctx.resourcesFolder)
+      .then((stats) => {
+        if (stats.isDirectory()) {
+          return fs.access(ctx.resourcesFolder)
+        }
+        else {
+          return fs.mkdir(ctx.resourcesFolder)
+        }
+      }).catch(() => fs.mkdir(ctx.resourcesFolder)).catch(fsCatch(ctx.resourcesFolder))
   },
 })
 
@@ -253,13 +235,9 @@ const writeResource = resource => ({
   title: `Write resource '${resource.resolvedUrl}' to '${resource.resultPath}'`,
   task: (ctx) => {
     ctx.savedFiles ??= []
-    return new Promise((resolve, reject) => {
-      fs.writeFile(resource.resultPath, resource.blob.stream())
-        .then(() => {
-          ctx.savedFiles.push(resource.resultPath)
-          resolve()
-        }).catch(fsCatch(reject, resource.resultPath))
-    })
+    return fs.writeFile(resource.resultPath, resource.blob.stream())
+      .then(() => ctx.savedFiles.push(resource.resultPath))
+      .catch(fsCatch(resource.resultPath))
   },
 })
 
@@ -278,20 +256,17 @@ const writeResources = () => ({
 })
 
 /**
- *
- * @param {*} reject
  * @param {string} path
- * @returns {(error: Error) => void}
  */
-const fsCatch = (reject, path) => (error) => {
+const fsCatch = path => (error) => {
   if (error.code === 'ENOENT') {
-    reject(new Error(`no such file or directory '${path}'`))
+    throw new Error(`no such file or directory '${path}'`)
   }
   else if (error.code === 'EACCES') {
-    reject(new Error(`no access to '${path}'`))
+    throw new Error(`no access to '${path}'`)
   }
   else {
-    reject(error)
+    throw error
   }
 }
 

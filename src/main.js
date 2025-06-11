@@ -65,7 +65,7 @@ const downloadResource = (url, ctx, asText = false) => ({
     ctx.downloads ??= {}
     return fetch(url).then((response) => {
       if (!response.ok) {
-          throw new Error(`${response.status} ${response.statusText} '${url}'`)
+        throw new Error(`${response.status} ${response.statusText} '${url}'`)
       }
       else {
         let filename = getFilename(url) + getFormat(url, response)

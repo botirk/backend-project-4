@@ -65,21 +65,7 @@ const downloadResource = (url, ctx, asText = false) => ({
     ctx.downloads ??= {}
     return fetch(url).then((response) => {
       if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error(`error 404 page not found '${url}'`)
-        }
-        else if (response.status === 403) {
-          throw new Error(`error 403 forbidden '${url}'`)
-        }
-        else if (response.status === 500) {
-          throw new Error(`error 500 server error '${url}'`)
-        }
-        else if (response.status === 401) {
-          throw new Error(`error 401 unauthorized '${url}'`)
-        }
-        else {
-          throw new Error(`error ${response.status} '${url}'`)
-        }
+          throw new Error(`${response.status} ${response.statusText} '${url}'`)
       }
       else {
         let filename = getFilename(url) + getFormat(url, response)
@@ -260,14 +246,12 @@ const writeResources = () => ({
  */
 const fsCatch = path => (error) => {
   if (error.code === 'ENOENT') {
-    throw new Error(`no such file or directory '${path}'`)
+    error.message = `no such file or directory '${path}'`
   }
   else if (error.code === 'EACCES') {
-    throw new Error(`no access to '${path}'`)
+    error.message = `no access to '${path}'`
   }
-  else {
-    throw error
-  }
+  throw error
 }
 
 /**

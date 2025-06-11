@@ -230,17 +230,17 @@ test.sequential('download mocked html with resources - folder fail', async () =>
 })
 
 test.sequential('download 404 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`error 404 page not found 'https://404.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://404.com/', tmpFolder)).rejects.toThrowError(`404 Not Found 'https://404.com/'`)
 })
 
 test.sequential('download 403 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`error 403 forbidden 'https://403.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://403.com/', tmpFolder)).rejects.toThrowError(`403 Forbidden 'https://403.com/'`)
 })
 
 test.sequential('download 401 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://401.com/', tmpFolder)).rejects.toThrowError(`error 401 unauthorized 'https://401.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://401.com/', tmpFolder)).rejects.toThrowError(`401 Unauthorized 'https://401.com/'`)
 })
 
 test.sequential('download 500 - fail', async () => {
-  await expect(downloadPageWithResourcesToFolder('https://500.com/', tmpFolder)).rejects.toThrowError(`error 500 server error 'https://500.com/'`)
+  await expect(downloadPageWithResourcesToFolder('https://500.com/', tmpFolder)).rejects.toThrowError(`500 Internal Server Error 'https://500.com/'`)
 })

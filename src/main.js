@@ -1,7 +1,10 @@
 import fs from 'node:fs/promises'
 import path from 'node:path'
+import { debuglog } from 'node:util'
 import { Listr } from 'listr2'
 import * as cheerio from 'cheerio'
+
+const debug = debuglog('page-loader')
 
 /**
  *
@@ -63,7 +66,9 @@ const downloadResource = (url, ctx, asText = false) => ({
   task: () => {
     if (ctx.downloads?.[url]) return
     ctx.downloads ??= {}
+    debug('fetch:', url)
     return fetch(url).then((response) => {
+      debug('response:', response)
       if (!response.ok) {
         throw new Error(`${response.status} ${response.statusText} '${url}'`)
       }
@@ -143,14 +148,16 @@ const parseHTMLandQueue = pageUrl => ({
 
 const checkFolder = folder => ({
   title: `Check output folder '${folder}'`,
-  task: () => fs.lstat(folder).then((stats) => {
-    if (stats.isDirectory()) {
-      return fs.access(folder)
-    }
-    else {
-      throw new Error(`'${folder}' is not directory`)
-    }
-  }),
+  task: () => fs.lstat(folder)
+    .then((stats) => {
+      if (stats.isDirectory()) {
+        return fs.access(folder).then(() => debug('folder ok:', folder))
+      }
+      else {
+        throw new Error(`'${folder}' is not directory`)
+      }
+    })
+    .then(() => debug('check folder ok:', folder)),
 })
 
 const transformHTMLandResources = (pageUrl, folder) => ({
@@ -195,6 +202,7 @@ const writeMainPage = (pageUrl, folder) => ({
     const resultPath = folder + '/' + ctx.downloads[pageUrl].filename
     return fs.writeFile(resultPath, ctx.downloads[pageUrl].text)
       .then(() => ctx.savedFiles.push(resultPath))
+      .then(() => debug('writeFile ok:', resultPath))
   },
 })
 
@@ -212,7 +220,9 @@ const createResourcesFolder = (pageUrl, folder) => ({
         else {
           return fs.mkdir(ctx.resourcesFolder)
         }
-      }).catch(() => fs.mkdir(ctx.resourcesFolder))
+      })
+      .catch(() => fs.mkdir(ctx.resourcesFolder))
+      .then(() => debug('mdir ok:', ctx.resourcesFolder))
   },
 })
 
@@ -222,6 +232,7 @@ const writeResource = resource => ({
     ctx.savedFiles ??= []
     return fs.writeFile(resource.resultPath, resource.blob.stream())
       .then(() => ctx.savedFiles.push(resource.resultPath))
+      .then(() => debug('writeFile ok:', resource.resultPath))
   },
 })
 

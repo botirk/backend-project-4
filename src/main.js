@@ -150,7 +150,7 @@ const checkFolder = folder => ({
     else {
       throw new Error(`'${folder}' is not directory`)
     }
-  }).catch(fsCatch(folder)),
+  }),
 })
 
 const transformHTMLandResources = (pageUrl, folder) => ({
@@ -195,7 +195,6 @@ const writeMainPage = (pageUrl, folder) => ({
     const resultPath = folder + '/' + ctx.downloads[pageUrl].filename
     return fs.writeFile(resultPath, ctx.downloads[pageUrl].text)
       .then(() => ctx.savedFiles.push(resultPath))
-      .catch(fsCatch(resultPath))
   },
 })
 
@@ -213,7 +212,7 @@ const createResourcesFolder = (pageUrl, folder) => ({
         else {
           return fs.mkdir(ctx.resourcesFolder)
         }
-      }).catch(() => fs.mkdir(ctx.resourcesFolder)).catch(fsCatch(ctx.resourcesFolder))
+      }).catch(() => fs.mkdir(ctx.resourcesFolder))
   },
 })
 
@@ -223,7 +222,6 @@ const writeResource = resource => ({
     ctx.savedFiles ??= []
     return fs.writeFile(resource.resultPath, resource.blob.stream())
       .then(() => ctx.savedFiles.push(resource.resultPath))
-      .catch(fsCatch(resource.resultPath))
   },
 })
 
@@ -240,19 +238,6 @@ const writeResources = () => ({
     return new Listr(tasks, { concurrent: true, rendererOptions: { collapseSubtasks: false } })
   },
 })
-
-/**
- * @param {string} path
- */
-const fsCatch = path => (error) => {
-  if (error.code === 'ENOENT') {
-    error.message = `no such file or directory '${path}'`
-  }
-  else if (error.code === 'EACCES') {
-    error.message = `no access to '${path}'`
-  }
-  throw error
-}
 
 /**
  *

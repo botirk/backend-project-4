@@ -226,7 +226,7 @@ test.sequential('download mocked html with resources - js success', async () => 
 })
 
 test.sequential('download mocked html with resources - folder fail', async () => {
-  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`no such file or directory '${tmpFolder + '0'}'`)
+  await expect(downloadPageWithResourcesToFolder(fetchSite + fetchUrl, tmpFolder + '0')).rejects.toThrowError(`no such file or directory, lstat '${tmpFolder + '0'}'`)
 })
 
 test.sequential('download 404 - fail', async () => {

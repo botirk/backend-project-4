@@ -151,7 +151,7 @@ const checkFolder = folder => ({
   task: () => fs.lstat(folder)
     .then((stats) => {
       if (stats.isDirectory()) {
-        return fs.access(folder).then(() => debug('folder ok:', folder))
+        return fs.access(folder)
       }
       else {
         throw new Error(`'${folder}' is not directory`)

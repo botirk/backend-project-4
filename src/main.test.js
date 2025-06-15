@@ -4,7 +4,7 @@ import os from 'node:os'
 import { beforeAll, beforeEach, expect, test } from 'vitest'
 import nock from 'nock'
 import * as cheerio from 'cheerio'
-import { downloadPageWithResourcesToFolder } from './main.js'
+import downloadPageWithResourcesToFolder from './main.js'
 
 const fetchFixture = await fs.readFile('fixtures/fetch.html', 'utf-8')
 const altFetchFixture = cheerio.load(await fs.readFile('fixtures/alt_fetch.html', 'utf-8')).html()

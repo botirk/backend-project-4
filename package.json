@@ -4,7 +4,8 @@
   "description": "hexlet node.js project #3",
   "main": "src/main.js",
   "scripts": {
-    "test": "NODE_DEBUG=nock:*,page-loader vitest run",
+    "testDebug": "NODE_DEBUG=nock:*,page-loader vitest run",
+    "test": "vitest run",
     "testci": "npm ci && npx vitest run --coverage",
     "lint": "eslint",
     "lintwithinstall": "npm ci && npx eslint"

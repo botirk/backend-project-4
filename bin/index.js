@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { program } from 'commander'
-import { downloadPageWithResourcesToFolder } from '../src/main.js'
+import downloadPageWithResourcesToFolder from '../src/main.js'
 
 const cwd = process.cwd()
 

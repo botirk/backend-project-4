@@ -7,7 +7,6 @@ import * as cheerio from 'cheerio'
 const debug = debuglog('page-loader')
 
 /**
- *
  * @param {string} url
  * @returns {string}
  */
@@ -18,7 +17,6 @@ const getFilename = (url) => {
 }
 
 /**
- *
  * @param {string} url
  * @param {Response} response
  * @returns {string}
@@ -218,7 +216,6 @@ const writeResources = () => ({
 })
 
 /**
- *
  * @param {string} pageUrl
  * @param {string} folder
  * @returns {Promise<string[]>}

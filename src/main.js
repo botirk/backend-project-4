@@ -147,23 +147,23 @@ const transformMainAndResources = (pageUrl, folder) => ({
   title: 'Transform main and resources',
   skip: ctx => !ctx.resourcesCount,
   task: (ctx) => {
-    ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
-    const relativePath = getFolder(pageUrl) + '/'
-    const resultPath = ctx.resourcesFolder + '/'
+    ctx.resourcesFolder = path.join(folder, getFolder(pageUrl))
+    const relativePath = getFolder(pageUrl)
+    const resultPath = ctx.resourcesFolder
 
     for (const cImg of ctx.cheerioIMGs) {
-      cImg.imgEl.attribs.src = relativePath + cImg.download.filename
-      cImg.resultPath = resultPath + cImg.download.filename
+      cImg.imgEl.attribs.src = relativePath + '/' + cImg.download.filename
+      cImg.resultPath = path.join(resultPath, cImg.download.filename)
     }
 
     for (const cLINK of ctx.cheerioLINKs) {
-      cLINK.linkEl.attribs.href = relativePath + cLINK.download.filename
-      cLINK.resultPath = resultPath + cLINK.download.filename
+      cLINK.linkEl.attribs.href = relativePath + '/' + cLINK.download.filename
+      cLINK.resultPath = path.join(resultPath, cLINK.download.filename)
     }
 
     for (const cJS of ctx.cheerioJSs) {
-      cJS.jsEl.attribs.src = relativePath + cJS.download.filename
-      cJS.resultPath = resultPath + cJS.download.filename
+      cJS.jsEl.attribs.src = relativePath + '/' + cJS.download.filename
+      cJS.resultPath = path.join(resultPath, cJS.download.filename)
     }
 
     ctx.main.text = ctx.cheerio.html()
@@ -173,7 +173,7 @@ const transformMainAndResources = (pageUrl, folder) => ({
 const writeMain = (pageUrl, folder) => ({
   title: `Write main page '${pageUrl}'`,
   task: (ctx, task) => {
-    const resultPath = folder + '/' + ctx.main.filename
+    const resultPath = path.join(folder, ctx.main.filename)
     task.title = `Write main page ${pageUrl} to ${resultPath}`
     return fs.writeFile(resultPath, ctx.main.text)
       .then(() => (ctx.savedFiles ??= []).push(resultPath))
@@ -185,7 +185,7 @@ const createResourcesFolder = (pageUrl, folder) => ({
   title: 'Create resources folder',
   skip: ctx => !ctx.resourcesCount,
   task: (ctx, task) => {
-    ctx.resourcesFolder = folder + '/' + getFolder(pageUrl)
+    ctx.resourcesFolder = path.join(folder, getFolder(pageUrl))
     task.title = `Create resources folder '${ctx.resourcesFolder}'`
     return fs.mkdir(ctx.resourcesFolder, { recursive: true })
       .then(() => debug('mdir ok:', ctx.resourcesFolder))
